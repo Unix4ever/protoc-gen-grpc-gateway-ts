@@ -5,11 +5,12 @@ import (
 	"strings"
 
 	descriptorpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
-	"github.com/grpc-ecosystem/protoc-gen-grpc-gateway-ts/data"
-	"github.com/grpc-ecosystem/protoc-gen-grpc-gateway-ts/options"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus" // nolint: depguard
 	"google.golang.org/protobuf/proto"
+
+	"github.com/siderolabs/protoc-gen-grpc-gateway-ts/data"
+	"github.com/siderolabs/protoc-gen-grpc-gateway-ts/options"
 )
 
 func (r *Registry) analyseFile(f *descriptorpb.FileDescriptorProto) (*data.File, error) {

@@ -8,13 +8,12 @@ import (
 	"strings"
 	"text/template"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/Masterminds/sprig"
 	"github.com/iancoleman/strcase"
+	log "github.com/sirupsen/logrus"
 
-	"github.com/grpc-ecosystem/protoc-gen-grpc-gateway-ts/data"
-	"github.com/grpc-ecosystem/protoc-gen-grpc-gateway-ts/registry"
+	"github.com/siderolabs/protoc-gen-grpc-gateway-ts/data"
+	"github.com/siderolabs/protoc-gen-grpc-gateway-ts/registry"
 )
 
 const tmpl = `
@@ -292,7 +291,7 @@ function getNewLineDelimitedJSONDecodingStream<T>(): TransformStream<string, T> 
         if (controller.buf[controller.pos] === '\n') {
           const line = controller.buf.substring(0, controller.pos)
           const response = JSON.parse(line)
-          controller.enqueue(response.result)
+          controller.enqueue(response.result ?? response)
           controller.buf = controller.buf.substring(controller.pos + 1)
           controller.pos = 0
         } else {

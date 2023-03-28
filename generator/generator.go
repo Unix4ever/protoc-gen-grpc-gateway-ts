@@ -8,11 +8,11 @@ import (
 	"text/template"
 
 	plugin "github.com/golang/protobuf/protoc-gen-go/plugin"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus" // nolint: depguard
 
-	"github.com/grpc-ecosystem/protoc-gen-grpc-gateway-ts/data"
-	"github.com/grpc-ecosystem/protoc-gen-grpc-gateway-ts/registry"
-	"github.com/pkg/errors"
+	"github.com/siderolabs/protoc-gen-grpc-gateway-ts/data"
+	"github.com/siderolabs/protoc-gen-grpc-gateway-ts/registry"
 )
 
 // TypeScriptGRPCGatewayGenerator is the protobuf generator for typescript

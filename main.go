@@ -6,11 +6,11 @@ import (
 	"strings"
 
 	plugin "github.com/golang/protobuf/protoc-gen-go/plugin"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus" // nolint: depguard
 	"google.golang.org/protobuf/proto"
 
-	"github.com/grpc-ecosystem/protoc-gen-grpc-gateway-ts/generator"
-	"github.com/pkg/errors"
+	"github.com/siderolabs/protoc-gen-grpc-gateway-ts/generator"
 )
 
 func decodeReq() *plugin.CodeGeneratorRequest {
