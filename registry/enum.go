@@ -23,9 +23,8 @@ func (r *Registry) analyseEnumType(fileData *data.File, packageName, fileName st
 	enumData.Name = packageIdentifier
 
 	for _, e := range enum.GetValue() {
-		enumData.Values = append(enumData.Values, e.GetName())
+		enumData.Values = append(enumData.Values, e.GetNumber())
 	}
 
 	fileData.Enums = append(fileData.Enums, enumData)
-
 }

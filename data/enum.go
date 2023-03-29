@@ -7,17 +7,14 @@ type Enum struct {
 	// Name will be the package level unique name
 	// Nested names will concat with their parent messages so that it will remain unique
 	// This also means nested type might be a bit ugly in type script but whatever
-	Name string
-	// Due to the fact that Protos allows alias fields which is not a feature
-	// in Typescript, it's better to use string representation of it.
-	// So Values here will basically be the name of the field.
-	Values []string
+	Name   string
+	Values []int32
 }
 
 // NewEnum creates an enum instance.
 func NewEnum() *Enum {
 	return &Enum{
 		Name:   "",
-		Values: make([]string, 0),
+		Values: make([]int32, 0),
 	}
 }
