@@ -24,7 +24,7 @@ const tmpl = `
 {{define "enums"}}
 {{range .}}export enum {{.Name}} {
 {{- range .Values}}
-  {{.}} = "{{.}}",
+  {{.Key}} = {{.Value}},
 {{- end}}
 }
 
