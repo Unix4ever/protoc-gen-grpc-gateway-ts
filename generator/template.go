@@ -53,12 +53,12 @@ export type {{.Name}} = {
 {{define "services"}}{{range .}}export class {{.Name}} {
 {{- range .Methods}}  
 {{- if .ServerStreaming }}
-  static {{.Name}}(req: {{tsType .Input}}, entityNotifier?: fm.NotifyStreamEntityArrival<{{tsType .Output}}>, initReq?: fm.InitReq): Promise<void> {
-    return fm.fetchStreamingRequest<{{tsType .Input}}, {{tsType .Output}}>(` + "`{{renderURL .}}`" + `, entityNotifier, {...initReq, {{buildInitReq .}}})
+  static {{.Name}}(req: {{tsType .Input}}, entityNotifier?: fm.NotifyStreamEntityArrival<{{tsType .Output}}>, ...options: fm.fetchOption[]): Promise<void> {
+    return fm.fetchStreamingRequest<{{tsType .Input}}, {{tsType .Output}}>({{ renderParams . }}, entityNotifier, ...options)
   }
 {{- else }}
-  static {{.Name}}(req: {{tsType .Input}}, initReq?: fm.InitReq): Promise<{{tsType .Output}}> {
-    return fm.fetchReq<{{tsType .Input}}, {{tsType .Output}}>(` + "`{{renderURL .}}`" + `, {...initReq, {{buildInitReq .}}})
+  static {{.Name}}(req: {{tsType .Input}}, ...options: fm.fetchOption[]): Promise<{{tsType .Output}}> {
+    return fm.fetchReq<{{tsType .Input}}, {{tsType .Output}}>({{ renderParams . }}, ...options)
   }
 {{- end}}
 {{- end}}
@@ -194,12 +194,21 @@ export function b64Decode(s: string): Uint8Array {
   return new Uint8Array(buffer);
 }
 
-function b64Test(s: string): boolean {
-	return /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(s);
+export interface fetchOption {
+  (req: RequestOptions): void
 }
 
-export interface InitReq extends RequestInit {
-  pathPrefix?: string
+let commonFetchOptions: fetchOption[];
+
+type Writeable<T> = { -readonly [P in keyof T]: T[P] };
+
+export type RequestOptions = Writeable<Request> & {
+  controller?: AbortController,
+  timeoutID?: number
+};
+
+export const setCommonFetchOptions = (...options: fetchOption[]) => {
+  commonFetchOptions = options;
 }
 
 export function replacer(key: any, value: any): any {
@@ -210,53 +219,90 @@ export function replacer(key: any, value: any): any {
   return value;
 }
 
-export function fetchReq<I, O>(path: string, init?: InitReq): Promise<O> {
-  const {pathPrefix, ...req} = init || {}
+const createRequest = <T>(method: string, path: string, body?: T, ...options: fetchOption[]): RequestOptions => {
+  const request: RequestOptions = {
+    url: path,
+    method: method,
+  };
 
-  const url = pathPrefix ? ` + "`${pathPrefix}${path}`" + ` : path
+  if (body) {
+    request.body = JSON.stringify(body, replacer);
+  }
 
-  return fetch(url, req).then(r => r.json().then((body: O) => {
-    if (!r.ok) { throw body; }
-    return body;
-  })) as Promise<O>
+  for (const opt of (commonFetchOptions ?? [])) {
+    opt(request);
+  }
+
+  for (const opt of options) {
+    opt(request);
+  }
+
+  return request;
+}
+
+export const fetchReq = async <T, O>(method: string, path: string, body?: T, ...options: fetchOption[]): Promise<O> => {
+  const req = createRequest(method, path, body, ...options);
+
+  try {
+    const response = await fetch(req.url, req);
+
+    if (!response.ok) {
+      await getError(response);
+    }
+
+    return (await response.json()) as O;
+  } finally {
+    if (req.timeoutID) {
+      clearTimeout(req.timeoutID);
+    }
+  }
 }
 
 // NotifyStreamEntityArrival is a callback that will be called on streaming entity arrival
 export type NotifyStreamEntityArrival<T> = (resp: T) => void
+
+const getError = async (result: Response) => {
+  let resp: any;
+
+  try {
+    resp = await result.json();
+  } catch (e) {
+    throw new Error(e.message);
+  }
+
+  throw resp;
+}
 
 /**
  * fetchStreamingRequest is able to handle grpc-gateway server side streaming call
  * it takes NotifyStreamEntityArrival that lets users respond to entity arrival during the call
  * all entities will be returned as an array after the call finishes.
  **/
-export async function fetchStreamingRequest<S, R>(path: string, callback?: NotifyStreamEntityArrival<R>, init?: InitReq) {
-  const {pathPrefix, ...req} = init || {}
-  const url = pathPrefix ?` + "`${pathPrefix}${path}`" + ` : path
-  const result = await fetch(url, req)
+export async function fetchStreamingRequest<T, R>(method: string, path: string, body?: T, callback: NotifyStreamEntityArrival<R>, ...options: fetchOption[]): Promise<void> {
+  const req = createRequest(method, path, body, ...options);
+  const result = await fetch(req.url, req);
+
   // needs to use the .ok to check the status of HTTP status code
   // http other than 200 will not throw an error, instead the .ok will become false.
   // see https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch#
   if (!result.ok) {
-    const resp = await result.json()
-    const errMsg = resp.error && resp.error.message ? resp.error.message : ""
-    throw new Error(errMsg)
+    await getError(result);
   }
 
   if (!result.body) {
-    throw new Error("response doesnt have a body")
+    throw new Error("response does not have a body")
   }
 
-  await result.body
-    .pipeThrough(new TextDecoderStream())
-    .pipeThrough<R>(getNewLineDelimitedJSONDecodingStream<R>())
-    .pipeTo(getNotifyEntityArrivalSink((e: R) => {
-      if (callback) {
-        callback(e)
-      }
-    }))
-
-  // wait for the streaming to finish and return the success respond
-  return
+  try {
+    await result.body
+      .pipeThrough(new TextDecoderStream())
+      .pipeThrough<R>(getNewLineDelimitedJSONDecodingStream<R>())
+      .pipeTo(getNotifyEntityArrivalSink(callback));
+  } finally {
+    if (req.timeoutID) {
+      clearTimeout(req.timeoutID);
+    }
+  }
 }
 
 /**
@@ -444,8 +490,7 @@ func GetTemplate(r *registry.Registry) *template.Template {
 		"tsType": func(fieldType data.Type) string {
 			return tsType(r, fieldType)
 		},
-		"renderURL":    renderURL(r),
-		"buildInitReq": buildInitReq,
+		"renderParams": renderParams(r),
 		"fieldName":    fieldName(r),
 	})
 
@@ -463,9 +508,10 @@ func fieldName(r *registry.Registry) func(name string) string {
 	}
 }
 
-func renderURL(r *registry.Registry) func(method data.Method) string {
+func renderParams(r *registry.Registry) func(method data.Method) string {
 	fieldNameFn := fieldName(r)
-	return func(method data.Method) string {
+
+	getURL := func(method data.Method) string {
 		methodURL := method.URL
 		reg := regexp.MustCompile("{([^}]+)}")
 		matches := reg.FindAllStringSubmatch(methodURL, -1)
@@ -500,20 +546,20 @@ func renderURL(r *registry.Registry) func(method data.Method) string {
 
 		return methodURL
 	}
-}
 
-func buildInitReq(method data.Method) string {
-	httpMethod := method.HTTPMethod
-	m := `method: "` + httpMethod + `"`
-	fields := []string{m}
-	if method.HTTPRequestBody == nil || *method.HTTPRequestBody == "*" {
-		fields = append(fields, "body: JSON.stringify(req, fm.replacer)")
-	} else if *method.HTTPRequestBody != "" {
-		fields = append(fields, `body: JSON.stringify(req["`+*method.HTTPRequestBody+`"], fm.replacer)`)
+	return func(method data.Method) string {
+		url := fmt.Sprintf("`%s`", getURL(method))
+		httpMethod := fmt.Sprintf("%q", method.HTTPMethod)
+		body := "null"
+
+		if method.HTTPRequestBody == nil || *method.HTTPRequestBody == "*" {
+			body = "req"
+		} else if *method.HTTPRequestBody != "" {
+			body = `req["` + *method.HTTPRequestBody + `"]`
+		}
+
+		return strings.Join([]string{httpMethod, url, body}, ", ")
 	}
-
-	return strings.Join(fields, ", ")
-
 }
 
 // GetFetchModuleTemplate returns the go template for fetch module
