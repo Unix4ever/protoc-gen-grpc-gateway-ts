@@ -20,6 +20,8 @@ type Message struct {
 	OneOfFieldsGroups map[int32][]*Field
 	// OneOfFieldNames is the names of one of fields with same index. so that renderer can render the clearing of other fields on set.
 	OneOfFieldsNames map[int32]string
+	// TypeAlias generates type alias instead of populating the list of fields for the message.
+	TypeAlias string
 }
 
 // HasOneOfFields returns true when the message has a one of field.

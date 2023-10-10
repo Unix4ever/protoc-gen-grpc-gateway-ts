@@ -41,6 +41,8 @@ type Base{{.Name}} = {
 export type {{.Name}} = Base{{.Name}}
 {{range $groupId, $fields := .OneOfFieldsGroups}}  & OneOf<{ {{range $index, $field := $fields}}{{fieldName $field.Name}}: {{tsType $field}}{{if (lt (add $index 1) (len $fields))}}; {{end}}{{end}} }>
 {{end}}
+{{- else if .TypeAlias -}}
+export type {{.Name}} = {{ .TypeAlias }}
 {{- else -}}
 export type {{.Name}} = {
 {{- range .Fields}}

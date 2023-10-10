@@ -11,6 +11,7 @@ func (r *Registry) analyseMessage(fileData *data.File, packageName, fileName str
 
 	fqName := r.getFullQualifiedName(packageName, parents, message.GetName()) // "." + packageName + "." + parentsPrefix + message.GetName()
 	protoType := descriptorpb.FieldDescriptorProto_TYPE_MESSAGE
+	typeAlias := ""
 
 	typeInfo := &TypeInformation{
 		FullyQualifiedName: fqName,
@@ -19,6 +20,13 @@ func (r *Registry) analyseMessage(fileData *data.File, packageName, fileName str
 		PackageIdentifier:  packageIdentifier,
 		LocalIdentifier:    message.GetName(),
 		ProtoType:          protoType,
+	}
+
+	// special handling for the well known types
+	switch fqName {
+	case ".google.protobuf.Timestamp",
+		".google.protobuf.Duration":
+		typeAlias = "string"
 	}
 
 	// register itself in the registry map
@@ -55,6 +63,7 @@ func (r *Registry) analyseMessage(fileData *data.File, packageName, fileName str
 	data := data.NewMessage()
 	data.Name = packageIdentifier
 	data.FQType = fqName
+	data.TypeAlias = typeAlias
 
 	newParents := append(parents, message.GetName())
 
